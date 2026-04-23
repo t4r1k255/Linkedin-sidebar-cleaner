@@ -1,0 +1,672 @@
+// ==UserScript==
+// @name         LinkedIn — Kenar Çubuğu Temizleyici
+// @name:en      LinkedIn — Sidebar Cleaner
+// @namespace    li-sidebar-cleaner
+// @version      1.0.0
+// @description  LinkedIn'in sağ kenar çubuğundaki "Tanıyor olabilirsiniz", Learning önerileri, trend haberler ve diğer dikkat dağıtıcı widget'ları bağımsız olarak gizler.
+// @description:en Hides distracting right sidebar widgets on LinkedIn: "People you may know", Learning suggestions, trending news, and more — each toggle independently.
+// @match        https://www.linkedin.com/*
+// @grant        none
+// @run-at       document-idle
+// @noframes
+// ==/UserScript==
+
+(function () {
+  'use strict';
+
+  // ─── STORAGE ─────────────────────────────────────────────────────────────────
+  const SK = 'lisc-settings'; // { enabled, widgets: { [id]: bool } }
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SK);
+      const defaults = {
+        enabled: true,
+        widgets: {
+          pymk:        true,  // Tanıyor olabilirsiniz
+          learning:    true,  // LinkedIn Learning
+          news:        true,  // Trend haberler
+          ads:         true,  // Reklam kutuları
+          premium:     true,  // Premium satış
+          events:      true,  // Etkinlikler
+          pages:       true,  // Sayfaları takip et
+          groups:      true,  // Gruplar
+          jobs_promo:  true,  // "Daha fazla iş keşfet"
+          hashtags:    true,  // Takip edilen hashtagler önerileri
+        }
+      };
+      if (!raw) return defaults;
+      const parsed = JSON.parse(raw);
+      // Yeni eklenen widget anahtarlarını varsayılanlarla birleştir
+      parsed.widgets = { ...defaults.widgets, ...(parsed.widgets || {}) };
+      return parsed;
+    } catch { return { enabled: true, widgets: {} }; }
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem(SK, JSON.stringify(settings)); } catch {}
+  }
+
+  let settings = loadSettings();
+
+  // ─── WIDGET TANIMI ───────────────────────────────────────────────────────────
+  // Her widget: id, label (TR), ve eşleşen CSS seçiciler
+  const WIDGETS = [
+    {
+      id: 'pymk',
+      label: 'Tanıyor Olabilirsiniz',
+      desc: '"People you may know" kutusu',
+      sels: [
+        '[data-view-name="pymk-entity"]',
+        '.pymk-hoist',
+        'section.pymk-hoist',
+        '[data-view-name*="pymk"]',
+        '.mn-pymk-flyout',
+        // widget başlıklarıyla tespit
+      ],
+      textMatch: ['tanıyor olabilirsiniz', 'people you may know'],
+    },
+    {
+      id: 'learning',
+      label: 'LinkedIn Learning',
+      desc: 'Kurs ve öğrenme önerileri',
+      sels: [
+        '[data-view-name="learning-recommendation"]',
+        '[data-view-name*="learning"]',
+        '.learning-recommendation',
+        '.learning-widget',
+        'section[aria-label*="Learning"]',
+        'section[aria-label*="Öğrenme"]',
+      ],
+      textMatch: ['linkedin learning', 'kurs önerisi', 'recommended courses'],
+    },
+    {
+      id: 'news',
+      label: 'Trend Haberler',
+      desc: '"LinkedIn Haberleri" ve trend konular',
+      sels: [
+        '[data-view-name="trending-news-widget"]',
+        '[data-view-name*="news"]',
+        '.trending-now-container',
+        '.news-module',
+        'section.news-module',
+        '[aria-label*="LinkedIn Haberleri"]',
+        '[aria-label*="LinkedIn News"]',
+        '[aria-label*="Today\'s news"]',
+      ],
+      textMatch: ['linkedin haberleri', 'linkedin news', 'today\'s news', 'günün haberleri'],
+    },
+    {
+      id: 'ads',
+      label: 'Reklamlar',
+      desc: 'Sponsorlu / reklam kutuları',
+      sels: [
+        '.ad-banner-container',
+        '[data-ad-banner]',
+        '[data-view-name*="right_rail_ad"]',
+        '[data-view-name*="ad-"]',
+        '.right-rail-ad',
+        'section[data-view-name*="sponsored"]',
+      ],
+      textMatch: ['sponsored', 'tanıtım', 'reklam'],
+    },
+    {
+      id: 'premium',
+      label: 'Premium Satış Kutuları',
+      desc: '"LinkedIn Premium\'a yükselt" gibi kutular',
+      sels: [
+        '.premium-upsell-module',
+        '.jobs-premium-upsell',
+        '[data-view-name*="premium-upsell"]',
+        '[data-view-name*="premium_upsell"]',
+        '.premium-paywall-profile-prompt',
+        '[aria-label*="Premium"]',
+        'section.premium-upsell-module',
+      ],
+      textMatch: ['premium\'a geç', 'try premium', 'upgrade to premium', 'linkedin premium'],
+    },
+    {
+      id: 'events',
+      label: 'Etkinlikler',
+      desc: 'Önerilen etkinlikler widget\'ı',
+      sels: [
+        '[data-view-name*="event"]',
+        '.events-module',
+        'section[aria-label*="Etkinlik"]',
+        'section[aria-label*="Event"]',
+      ],
+      textMatch: ['önerilen etkinlikler', 'recommended events', 'events near you'],
+    },
+    {
+      id: 'pages',
+      label: 'Sayfaları Takip Et',
+      desc: '"Önerilen sayfalar" ve şirket önerileri',
+      sels: [
+        '[data-view-name*="follow-page"]',
+        '[data-view-name*="pages-you-may"]',
+        '.pages-recommendation',
+        'section[aria-label*="Takip etmek"]',
+        'section[aria-label*="Pages to follow"]',
+        'section[aria-label*="Companies to follow"]',
+      ],
+      textMatch: ['takip edebilirsiniz', 'pages to follow', 'companies to follow', 'şirketleri takip'],
+    },
+    {
+      id: 'groups',
+      label: 'Gruplar',
+      desc: 'Grup önerileri widget\'ı',
+      sels: [
+        '[data-view-name*="group"]',
+        '.groups-module',
+        'section[aria-label*="Grup"]',
+        'section[aria-label*="Group"]',
+      ],
+      textMatch: ['grup önerileri', 'groups you may like', 'suggested groups'],
+    },
+    {
+      id: 'jobs_promo',
+      label: 'İş Önerileri Kutusu',
+      desc: '"Daha fazla iş keşfet" ve işe alım widgetları',
+      sels: [
+        '[data-view-name*="job-recommendation"]',
+        '[data-view-name*="jobs-you-may"]',
+        '.jobs-home-upsell-card',
+        'section[aria-label*="İlginizi çekebilecek"]',
+        'section[aria-label*="Jobs you may be interested in"]',
+        'section[aria-label*="More jobs for you"]',
+      ],
+      textMatch: ['ilginizi çekebilecek işler', 'jobs you may be interested', 'more jobs for you'],
+    },
+    {
+      id: 'hashtags',
+      label: 'Hashtag Önerileri',
+      desc: 'Takip edilebilecek hashtagler',
+      sels: [
+        '[data-view-name*="hashtag"]',
+        '.hashtag-follow-module',
+        'section[aria-label*="Hashtag"]',
+      ],
+      textMatch: ['hashtag önerileri', 'hashtags to follow', 'suggested hashtags'],
+    },
+  ];
+
+  // ─── GENEL KENAR ÇUBUĞU CONTAINER'LARI ───────────────────────────────────────
+  // Bunların içindeki section'lar taranır; doğrudan kenar çubuğunu gizlemek yerine
+  // tek tek widget'ları hedefleriz.
+  const SIDEBAR_CONTAINERS = [
+    'aside.scaffold-layout__aside',
+    'div.scaffold-layout__aside',
+    'aside[class*="right-rail"]',
+    '.right-rail',
+    '.scaffold-layout__sidebar',
+    '.scaffold-layout-container__sidebar-wrapper',
+  ];
+
+  function normText(s) {
+    return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+
+  // Bir elemana bakarak hangi widget'a ait olduğunu bul (textMatch ile)
+  function detectWidgetByText(el) {
+    const text = normText(el.textContent || '');
+    const ariaLabel = normText(el.getAttribute('aria-label') || '');
+    const combined = text.slice(0, 200) + ' ' + ariaLabel;
+
+    for (const w of WIDGETS) {
+      for (const kw of w.textMatch) {
+        if (combined.includes(normText(kw))) return w.id;
+      }
+    }
+    return null;
+  }
+
+  // ─── GİZLEME MANTIĞI ─────────────────────────────────────────────────────────
+  function shouldHideWidget(id) {
+    return settings.enabled && (settings.widgets[id] ?? false);
+  }
+
+  function processWidgets() {
+    // 1. Her widget'ın seçicileriyle doğrudan eşleşen elemanları gizle
+    for (const w of WIDGETS) {
+      for (const sel of w.sels) {
+        try {
+          document.querySelectorAll(sel).forEach(el => {
+            const target = getSectionTarget(el);
+            if (!target) return;
+            if (shouldHideWidget(w.id)) {
+              target.setAttribute('data-lisc', w.id);
+            } else if (target.getAttribute('data-lisc') === w.id) {
+              target.removeAttribute('data-lisc');
+            }
+          });
+        } catch {}
+      }
+    }
+
+    // 2. Kenar çubuğu içindeki section'ları metin tabanlı tara
+    for (const cSel of SIDEBAR_CONTAINERS) {
+      const container = document.querySelector(cSel);
+      if (!container) continue;
+
+      const sections = container.querySelectorAll(
+        'section, div[data-view-name], [class*="-module"], [class*="-widget"]'
+      );
+
+      for (const sec of sections) {
+        // Zaten işaretlenmişse atla
+        if (sec.hasAttribute('data-lisc')) continue;
+
+        const wId = detectWidgetByText(sec);
+        if (!wId) continue;
+
+        if (shouldHideWidget(wId)) {
+          sec.setAttribute('data-lisc', wId);
+        }
+      }
+    }
+
+    // 3. Gizleme kaldırma: mod kapatıldıysa attribute'ları temizle
+    document.querySelectorAll('[data-lisc]').forEach(el => {
+      const wId = el.getAttribute('data-lisc');
+      if (!shouldHideWidget(wId)) {
+        el.removeAttribute('data-lisc');
+      }
+    });
+
+    updateBadgeCount();
+    updatePanelState();
+  }
+
+  // En yakın uygun section/div'i bul (çok küçük child'lara uygulamaktan kaçın)
+  function getSectionTarget(el) {
+    // Eğer eleman zaten bir section veya büyük container'sa direkt kullan
+    if (['SECTION', 'ASIDE', 'ARTICLE'].includes(el.tagName)) return el;
+    const sec = el.closest('section, aside, article, [data-view-name]');
+    return sec || el;
+  }
+
+  // ─── CSS ─────────────────────────────────────────────────────────────────────
+  function injectCSS() {
+    let el = document.getElementById('lisc-style');
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'lisc-style';
+      document.head.appendChild(el);
+    }
+    el.textContent = `
+      /* ── Widget gizleme ── */
+      [data-lisc] {
+        display: none !important;
+      }
+
+      /* ── Rozet ── */
+      #lisc-badge {
+        position: fixed;
+        top: 72px;
+        left: 14px;
+        z-index: 999998;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: rgba(16,22,28,0.93);
+        border: 1px solid rgba(255,255,255,0.13);
+        border-radius: 999px;
+        padding: 5px 12px 5px 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        user-select: none;
+      }
+      #lisc-badge .lisc-count {
+        font-size: 14px; font-weight: 700; color: #e4eaf0; min-width: 16px; text-align: right;
+      }
+      #lisc-badge .lisc-lbl {
+        font-size: 10px; color: #6e8090; font-weight: 500;
+      }
+      #lisc-badge .lisc-sep {
+        width: 1px; height: 14px; background: rgba(255,255,255,0.12);
+      }
+      #lisc-badge button {
+        border: 1px solid rgba(255,255,255,0.18); border-radius: 999px;
+        padding: 3px 9px; font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+        cursor: pointer; background: rgba(255,255,255,0.07);
+        color: #9aabb8; font-family: inherit; line-height: 1.4;
+      }
+      #lisc-badge button:hover { background: rgba(255,255,255,0.13); color: #c8d8e4; }
+      #lisc-badge button.on {
+        background: rgba(10,102,194,0.25);
+        border-color: rgba(10,102,194,0.55);
+        color: #7ec8ff;
+      }
+      #lisc-badge button.manage { background: rgba(255,255,255,0.06); color: #8fa0af; }
+      #lisc-badge button.manage:hover { background: rgba(255,255,255,0.12); color: #c8d8e4; }
+
+      /* ── Panel ── */
+      #lisc-panel {
+        position: fixed;
+        top: 116px; left: 14px;
+        z-index: 999997;
+        width: 300px;
+        background: #111820;
+        border: 1px solid rgba(255,255,255,0.13);
+        border-radius: 14px;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+        font-family: "Segoe UI", system-ui, sans-serif;
+        display: flex; flex-direction: column;
+        max-height: calc(100vh - 140px);
+        overflow: hidden;
+      }
+      .lisc-panel-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 14px 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.09);
+        flex-shrink: 0;
+      }
+      .lisc-panel-title {
+        font-size: 13px; font-weight: 600; color: #d0dce8;
+      }
+      .lisc-panel-close {
+        background: none; border: none; color: #6e8090; cursor: pointer;
+        font-size: 14px; padding: 2px 6px; border-radius: 6px;
+      }
+      .lisc-panel-close:hover { color: #c8d8e4; background: rgba(255,255,255,0.08); }
+      .lisc-panel-body {
+        flex: 1; overflow-y: auto; padding: 8px 10px 12px;
+      }
+      .lisc-panel-body::-webkit-scrollbar { width: 4px; }
+      .lisc-panel-body::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.12); border-radius: 4px;
+      }
+      .lisc-row {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 6px; border-radius: 8px; gap: 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+      }
+      .lisc-row:last-child { border-bottom: none; }
+      .lisc-row:hover { background: rgba(255,255,255,0.03); }
+      .lisc-row-info { flex: 1; min-width: 0; }
+      .lisc-row-name {
+        font-size: 12px; font-weight: 500; color: #c8d8e4;
+      }
+      .lisc-row-desc {
+        font-size: 10px; color: #4a5e70; margin-top: 2px;
+      }
+      /* Toggle switch */
+      .lisc-toggle {
+        position: relative; width: 36px; height: 20px; flex-shrink: 0;
+      }
+      .lisc-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+      .lisc-toggle-track {
+        position: absolute; inset: 0;
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-radius: 999px; cursor: pointer;
+        transition: background 0.18s, border-color 0.18s;
+      }
+      .lisc-toggle input:checked + .lisc-toggle-track {
+        background: rgba(10,102,194,0.5);
+        border-color: rgba(10,102,194,0.7);
+      }
+      .lisc-toggle-thumb {
+        position: absolute;
+        top: 3px; left: 3px;
+        width: 12px; height: 12px;
+        background: #6e8090;
+        border-radius: 50%;
+        transition: transform 0.18s, background 0.18s;
+        pointer-events: none;
+      }
+      .lisc-toggle input:checked ~ .lisc-toggle-thumb {
+        transform: translateX(16px);
+        background: #7ec8ff;
+      }
+      .lisc-panel-footer {
+        padding: 10px 14px;
+        border-top: 1px solid rgba(255,255,255,0.09);
+        display: flex; gap: 8px; flex-shrink: 0;
+      }
+      .lisc-panel-footer button {
+        flex: 1; background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.12);
+        color: #8fa0af; border-radius: 8px; padding: 6px 8px;
+        font-size: 11px; font-weight: 600; cursor: pointer; font-family: inherit;
+      }
+      .lisc-panel-footer button:hover { background: rgba(255,255,255,0.11); color: #c8d8e4; }
+      .lisc-panel-footer button.danger { color: #f87171; border-color: rgba(220,38,38,0.25); }
+      .lisc-panel-footer button.danger:hover { background: rgba(220,38,38,0.15); }
+
+      @media (max-width: 900px) {
+        #lisc-badge { top: 60px; left: 8px; }
+        #lisc-panel { left: 8px; width: calc(100vw - 16px); }
+      }
+    `;
+  }
+
+  // ─── ROZET ───────────────────────────────────────────────────────────────────
+  let badge     = null;
+  let countEl   = null;
+  let toggleBtn = null;
+
+  function ensureBadge() {
+    if (badge && document.body.contains(badge)) return;
+
+    badge = document.createElement('div');
+    badge.id = 'lisc-badge';
+
+    countEl = document.createElement('span');
+    countEl.className = 'lisc-count';
+    countEl.textContent = '0';
+
+    const lbl = document.createElement('span');
+    lbl.className = 'lisc-lbl';
+    lbl.textContent = 'widget gizli';
+
+    const sep = document.createElement('div');
+    sep.className = 'lisc-sep';
+
+    toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.textContent = 'Kenar Çubuğu';
+    toggleBtn.className = settings.enabled ? 'on' : '';
+    toggleBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      settings.enabled = !settings.enabled;
+      saveSettings();
+      toggleBtn.className = settings.enabled ? 'on' : '';
+      processWidgets();
+    });
+
+    const manageBtn = document.createElement('button');
+    manageBtn.type = 'button';
+    manageBtn.textContent = '⚙ Yönet';
+    manageBtn.className = 'manage';
+    manageBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      openPanel();
+    });
+
+    badge.appendChild(countEl);
+    badge.appendChild(lbl);
+    badge.appendChild(sep);
+    badge.appendChild(toggleBtn);
+    badge.appendChild(manageBtn);
+    document.body.appendChild(badge);
+  }
+
+  function updateBadgeCount() {
+    if (countEl) countEl.textContent = String(document.querySelectorAll('[data-lisc]').length);
+  }
+
+  // ─── YÖNETİM PANELİ ──────────────────────────────────────────────────────────
+  let panel = null;
+
+  function openPanel() {
+    if (panel && document.body.contains(panel)) { closePanel(); return; }
+
+    panel = document.createElement('div');
+    panel.id = 'lisc-panel';
+
+    const header = document.createElement('div');
+    header.className = 'lisc-panel-header';
+    header.innerHTML = `
+      <span class="lisc-panel-title">Kenar Çubuğu Widget'ları</span>
+      <button class="lisc-panel-close" id="lisc-close">✕</button>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'lisc-panel-body';
+
+    WIDGETS.forEach(w => {
+      const isOn = settings.widgets[w.id] ?? false;
+
+      const row = document.createElement('div');
+      row.className = 'lisc-row';
+
+      const info = document.createElement('div');
+      info.className = 'lisc-row-info';
+      info.innerHTML = `
+        <div class="lisc-row-name">${w.label}</div>
+        <div class="lisc-row-desc">${w.desc}</div>
+      `;
+
+      const toggle = document.createElement('label');
+      toggle.className = 'lisc-toggle';
+      toggle.setAttribute('title', isOn ? 'Gizleniyor — tıklayarak göster' : 'Gösteriliyor — tıklayarak gizle');
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = isOn;
+      input.addEventListener('change', () => {
+        settings.widgets[w.id] = input.checked;
+        saveSettings();
+        processWidgets();
+      });
+
+      const track = document.createElement('div');
+      track.className = 'lisc-toggle-track';
+      const thumb = document.createElement('div');
+      thumb.className = 'lisc-toggle-thumb';
+
+      toggle.appendChild(input);
+      toggle.appendChild(track);
+      toggle.appendChild(thumb);
+
+      row.appendChild(info);
+      row.appendChild(toggle);
+      body.appendChild(row);
+    });
+
+    const footer = document.createElement('div');
+    footer.className = 'lisc-panel-footer';
+
+    const allOnBtn = document.createElement('button');
+    allOnBtn.textContent = 'Tümünü Gizle';
+    allOnBtn.addEventListener('click', () => {
+      WIDGETS.forEach(w => { settings.widgets[w.id] = true; });
+      saveSettings();
+      processWidgets();
+      closePanel(); openPanel();
+    });
+
+    const allOffBtn = document.createElement('button');
+    allOffBtn.textContent = 'Tümünü Göster';
+    allOffBtn.className = 'danger';
+    allOffBtn.addEventListener('click', () => {
+      WIDGETS.forEach(w => { settings.widgets[w.id] = false; });
+      saveSettings();
+      processWidgets();
+      closePanel(); openPanel();
+    });
+
+    footer.appendChild(allOnBtn);
+    footer.appendChild(allOffBtn);
+
+    panel.appendChild(header);
+    panel.appendChild(body);
+    panel.appendChild(footer);
+    document.body.appendChild(panel);
+
+    document.getElementById('lisc-close').addEventListener('click', closePanel);
+
+    setTimeout(() => {
+      document.addEventListener('click', outsideClick);
+    }, 0);
+  }
+
+  function closePanel() {
+    panel?.remove();
+    panel = null;
+    document.removeEventListener('click', outsideClick);
+  }
+
+  function outsideClick(e) {
+    if (panel && !panel.contains(e.target) && !e.target.closest('#lisc-badge')) {
+      closePanel();
+    }
+  }
+
+  function updatePanelState() {
+    if (!panel) return;
+    // Toggle state'leri güncelle (panel açıkken processWidgets çağrılırsa)
+    WIDGETS.forEach(w => {
+      const input = panel.querySelector(`input[data-id="${w.id}"]`);
+      if (input) input.checked = settings.widgets[w.id] ?? false;
+    });
+  }
+
+  // ─── OBSERVER & ZAMANLAYICILAR ────────────────────────────────────────────────
+  let rafId    = null;
+  let mutTimer = null;
+
+  function scheduleRefresh() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => { rafId = null; processWidgets(); });
+  }
+
+  const observer = new MutationObserver(() => {
+    if (mutTimer) return;
+    mutTimer = setTimeout(() => { mutTimer = null; scheduleRefresh(); }, 200);
+  });
+
+  // ─── ROTA TAKİBİ ─────────────────────────────────────────────────────────────
+  let lastPath = location.pathname;
+
+  function onRouteChange() {
+    if (location.pathname === lastPath) return;
+    lastPath = location.pathname;
+    setTimeout(scheduleRefresh, 400);
+    setTimeout(scheduleRefresh, 1200);
+  }
+
+  function patchHistory(method) {
+    const orig = history[method].bind(history);
+    history[method] = function (...args) {
+      const r = orig(...args);
+      onRouteChange();
+      return r;
+    };
+  }
+
+  // ─── BAŞLATMA ────────────────────────────────────────────────────────────────
+  function init() {
+    injectCSS();
+    ensureBadge();
+    scheduleRefresh();
+    setTimeout(scheduleRefresh, 800);
+    setTimeout(scheduleRefresh, 2000);
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    patchHistory('pushState');
+    patchHistory('replaceState');
+    window.addEventListener('popstate', onRouteChange);
+
+    setInterval(scheduleRefresh, 3000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+
+})();
