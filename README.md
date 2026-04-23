@@ -51,8 +51,9 @@ Sol üst köşede küçük bir panel belirir.
 - **Tümünü Gizle / Tümünü Göster** butonları toplu işlem yapar
 - Sol üstteki sayı kaç widget'ın o an gizlendiğini gösterir
 
----
+## ⚠️ Yasal Uyarı
 
+Bu script LinkedIn ile herhangi bir bağlantısı olmayan bağımsız bir topluluk aracıdır. LinkedIn'in [Kullanım Koşulları](https://www.linkedin.com/legal/user-agreement)'na uygun şekilde kullan.
 
 ## Lisans
 
