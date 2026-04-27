@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LinkedIn — Kenar Çubuğu Temizleyici
 // @name:en      LinkedIn — Sidebar Cleaner
-// @namespace    li-sidebar-cleaner
+// @namespace    https://github.com/t4r1k255/Linkedin-sidebar-cleaner
 // @version      1.0.0
 // @description  LinkedIn'in sağ kenar çubuğundaki "Tanıyor olabilirsiniz", Learning önerileri, trend haberler ve diğer dikkat dağıtıcı widget'ları bağımsız olarak gizler.
 // @description:en Hides distracting right sidebar widgets on LinkedIn: "People you may know", Learning suggestions, trending news, and more — each toggle independently.
