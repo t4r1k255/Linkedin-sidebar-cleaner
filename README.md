@@ -4,7 +4,34 @@ LinkedIn'in sağ kenar çubuğundaki dikkat dağıtıcı widget'ları bağımsı
 
 ---
 
-## Özellikler
+**[English](#english) · [Türkçe](#türkçe)**
+
+---
+
+## English
+
+Hides distracting widgets in LinkedIn's right sidebar.
+
+### Features
+
+- 10 widget types can be toggled independently: People you may know, LinkedIn Learning, trending news, ads, Premium upsells, events and more
+- Turn all hiding off with one click
+- Settings persist across page reloads
+- Works on every LinkedIn page
+
+### Install
+
+1. Install the [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/) browser extension.
+2. **[Click here to install the script](https://github.com/t4r1k255/Linkedin-sidebar-cleaner/raw/main/linkedin-sidebar-cleaner.user.js)** and confirm with **Install**.
+3. Open or refresh LinkedIn.
+
+Independent community tool, not affiliated with LinkedIn.
+
+---
+
+## Türkçe
+
+### Özellikler
 
 - 10 farklı widget türü bağımsız olarak açılıp kapatılabilir
 - Tüm gizleme tek tıkla devre dışı bırakılabilir
@@ -13,7 +40,7 @@ LinkedIn'in sağ kenar çubuğundaki dikkat dağıtıcı widget'ları bağımsı
 
 ---
 
-## Gizlenebilen Widget'lar
+### Gizlenebilen Widget'lar
 
 | Widget | Açıklama |
 |---|---|
@@ -30,7 +57,9 @@ LinkedIn'in sağ kenar çubuğundaki dikkat dağıtıcı widget'ları bağımsı
 
 ---
 
-## Kurulum
+### Kurulum
+
+**En kolay yol:** [Scripti kurmak için buraya tıkla](https://github.com/t4r1k255/Linkedin-sidebar-cleaner/raw/main/linkedin-sidebar-cleaner.user.js) ve **Install / Yükle**'ye bas. Elle kurmak istersen:
 
 1. Tarayıcına [Tampermonkey](https://www.tampermonkey.net/) ya da [Violentmonkey](https://violentmonkey.github.io/) eklentisini yükle.
 2. [linkedin-sidebar-cleaner.user.js](./linkedin-sidebar-cleaner.user.js) dosyasını aç.
@@ -41,7 +70,7 @@ LinkedIn'in sağ kenar çubuğundaki dikkat dağıtıcı widget'ları bağımsı
 
 ---
 
-## Kullanım
+### Kullanım
 
 Sol üst köşede küçük bir panel belirir.
 
@@ -51,10 +80,10 @@ Sol üst köşede küçük bir panel belirir.
 - **Tümünü Gizle / Tümünü Göster** butonları toplu işlem yapar
 - Sol üstteki sayı kaç widget'ın o an gizlendiğini gösterir
 
-## ⚠️ Yasal Uyarı
+### ⚠️ Yasal Uyarı
 
 Bu script LinkedIn ile herhangi bir bağlantısı olmayan bağımsız bir topluluk aracıdır. LinkedIn'in [Kullanım Koşulları](https://www.linkedin.com/legal/user-agreement)'na uygun şekilde kullan.
 
-## Lisans
+### Lisans
 
 MIT
